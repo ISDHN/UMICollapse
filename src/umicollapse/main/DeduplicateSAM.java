@@ -13,6 +13,7 @@ import java.util.Spliterator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 
 import java.util.stream.Stream;
@@ -66,14 +67,14 @@ public class DeduplicateSAM {
             // if (paired && record.getReadPairedFlag() && record.getSecondOfPairFlag())
             // continue;
             // synchronized (lockf) {
-                totalReadCount++;
-                if (record.getReadUnmappedFlag()) { // discard unmapped reads
-                    unmapped++;
-                    if (keepUnmapped)
-                        writer.write(record);
-                    return;
-                }
-                readCount++;
+            totalReadCount++;
+            if (record.getReadUnmappedFlag()) { // discard unmapped reads
+                unmapped++;
+                if (keepUnmapped)
+                    writer.write(record);
+                return;
+            }
+            readCount++;
             // }
             // if (paired) {
             // if (!record.getReadPairedFlag()) {
@@ -161,6 +162,7 @@ public class DeduplicateSAM {
                     * (paired && !trackClusters) ? align.entrySet().stream().sorted((a, b) ->
                     * a.getKey().getRef().compareTo(b.getKey().getRef())) :
                     */align.entrySet().stream());
+        List<Read> allReads = new LinkedList<Read>();
 
         alignedEntryStream.forEach(e -> {
             List<Read> deduped;
@@ -191,11 +193,12 @@ public class DeduplicateSAM {
                 // if(trackClusters){
                 // clusterTrackers.put(e.getKey(), currTracker);
                 // }else{
-                for (Read read : deduped)
-                    writer.write(((SAMRead) read).toSAMRecord());
+                allReads.addAll(allReads);
                 // }
             }
         });
+        for (Read read : allReads)
+            writer.write(((SAMRead) read).toSAMRecord());
 
         // second pass to tag reads with their cluster and other stats
         /*
