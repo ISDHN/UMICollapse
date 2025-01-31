@@ -127,7 +127,7 @@ public class Main {
             // System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
             // (Integer.parseInt(m.get(s).get(0)) - 1) + "");
             parallelAlign = true;
-            parallelData = false;
+            // parallelData = false;
         }
 
         s = "-T";
@@ -136,7 +136,7 @@ public class Main {
             // System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
             // (Integer.parseInt(m.get(s).get(0)) - 1) + "");
             parallelData = true;
-            parallelAlign = false;
+            // parallelAlign = false;
         }
 
         s = "--algo";
