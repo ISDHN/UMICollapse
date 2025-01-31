@@ -12,23 +12,23 @@ import umicollapse.data.*;
 import umicollapse.merge.*;
 import umicollapse.algo.*;
 
-public class Main{
-    public static void main(String[] args){
+public class Main {
+    public static void main(String[] args) {
         System.out.println("Arguments\t" + Arrays.toString(args));
 
         long startTime = System.currentTimeMillis();
 
-        if(args.length == 0)
+        if (args.length == 0)
             throw new IllegalArgumentException("No arguments specified!");
 
         Map<String, List<String>> m = new HashMap<>();
         String curr = null;
 
-        for(int i = 1; i < args.length; i++){
-            if(args[i].startsWith("-")){
+        for (int i = 1; i < args.length; i++) {
+            if (args[i].startsWith("-")) {
                 curr = args[i];
                 m.put(args[i], new ArrayList<String>());
-            }else{
+            } else {
                 m.get(curr).add(args[i]);
             }
         }
@@ -94,106 +94,108 @@ public class Main{
 
         String s = "-k";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             k = Integer.parseInt(m.get(s).get(0));
 
         s = "-u";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             umiLength = Integer.parseInt(m.get(s).get(0));
 
         s = "-p";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             percentage = Float.parseFloat(m.get(s).get(0));
 
         s = "-i";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             in = new File(m.get(s).get(0));
         else
             throw new IllegalArgumentException("Missing input file!");
 
         s = "-o";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             out = new File(m.get(s).get(0));
         else
             throw new IllegalArgumentException("Missing output file!");
 
         s = "-t";
 
-        if(m.containsKey(s)){
-            System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", (Integer.parseInt(m.get(s).get(0)) - 1) + "");
+        if (m.containsKey(s)) {
+            // System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
+            // (Integer.parseInt(m.get(s).get(0)) - 1) + "");
             parallelAlign = true;
-            parallelData = false;
+            // parallelData = false;
         }
 
         s = "-T";
 
-        if(m.containsKey(s)){
-            System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", (Integer.parseInt(m.get(s).get(0)) - 1) + "");
+        if (m.containsKey(s)) {
+            // System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
+            // (Integer.parseInt(m.get(s).get(0)) - 1) + "");
             parallelData = true;
-            parallelAlign = false;
+            // parallelAlign = false;
         }
 
         s = "--algo";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             algoStr = m.get(s).get(0);
 
         s = "--data";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             dataStr = m.get(s).get(0);
 
         s = "--merge";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             mergeStr = m.get(s).get(0);
 
         s = "--umi-sep";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             umiSeparator = m.get(s).get(0);
 
         s = "--two-pass";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             twoPass = true;
 
         s = "--paired";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             paired = true;
 
         s = "--remove-unpaired";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             removeUnpaired = true;
 
         s = "--remove-chimeric";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             removeChimeric = true;
 
         s = "--keep-unmapped";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             keepUnmapped = true;
 
         s = "--tag";
 
-        if(m.containsKey(s))
+        if (m.containsKey(s))
             trackClusters = true;
 
-        if(trackClusters && twoPass)
+        if (trackClusters && twoPass)
             throw new UnsupportedOperationException("Cannot track clusters with the two pass algorithm!");
 
-        if(paired && parallelAlign)
+        if (paired && parallelAlign)
             throw new UnsupportedOperationException("Cannot process paired-end reads in parallel!");
 
-        if(paired && keepUnmapped)
+        if (paired && keepUnmapped)
             throw new UnsupportedOperationException("Cannot keep unmapped reads with paired-end reads!");
 
         Algo a = null;
@@ -202,26 +204,29 @@ public class Main{
 
         d = data.get(parallelData).get(dataStr);
 
-        try{
+        try {
             a = algo.get(parallelData).get(algoStr).getDeclaredConstructor().newInstance();
             mAlgo = merge.get(mergeStr).getDeclaredConstructor().newInstance();
-        }catch(Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
-        if(mode.equals("fastq")){
+        if (mode.equals("fastq")) {
             DeduplicateFASTQ dedup = new DeduplicateFASTQ();
             dedup.deduplicateAndMerge(in, out, a, d, mAlgo, umiLength, k, percentage, parallelAlign, trackClusters);
-        }else if(mode.equals("bam") || mode.equals("sam")){
+        } else if (mode.equals("bam") || mode.equals("sam")) {
             DeduplicateSAM dedup = new DeduplicateSAM();
 
-            if(twoPass){
-                dedup.deduplicateAndMergeTwoPass(in, out, a, d, mAlgo, umiLength, k, percentage, umiSeparator, paired, removeUnpaired, removeChimeric, keepUnmapped, trackClusters);
-            }else{
-                dedup.deduplicateAndMerge(in, out, a, d, mAlgo, umiLength, k, percentage, parallelAlign, umiSeparator, paired, removeUnpaired, removeChimeric, keepUnmapped, trackClusters);
+            if (twoPass) {
+                dedup.deduplicateAndMergeTwoPass(in, out, a, d, mAlgo, umiLength, k, percentage, umiSeparator, paired,
+                        removeUnpaired, removeChimeric, keepUnmapped, trackClusters);
+            } else {
+                dedup.deduplicateAndMerge(in, out, a, d, mAlgo, umiLength, k, percentage, parallelAlign, umiSeparator,
+                        paired, removeUnpaired, removeChimeric, keepUnmapped, trackClusters);
             }
         }
 
-        System.out.println("UMI collapsing finished in " + ((System.currentTimeMillis() - startTime) / 1000.0) + " seconds!");
+        System.out.println(
+                "UMI collapsing finished in " + ((System.currentTimeMillis() - startTime) / 1000.0) + " seconds!");
     }
 }
