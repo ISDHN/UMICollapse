@@ -51,12 +51,13 @@ public class DeduplicateSAM {
         umiLength = umiLengthParam;
         totalReadCount = 0;
         unmapped = 0;
+        Object lockf = new Object();
         int unpaired = 0;
         int chimeric = 0;
         readCount = 0;
 
         Spliterator<SAMRecord> spliterator = reader.spliterator();
-        Stream<SAMRecord> recordStream = StreamSupport.stream(spliterator, parallel);
+        Stream<SAMRecord> recordStream = StreamSupport.stream(spliterator, true);
 
         recordStream.forEach(record -> {
             // always skip the reversed read
@@ -64,14 +65,15 @@ public class DeduplicateSAM {
 
             // if (paired && record.getReadPairedFlag() && record.getSecondOfPairFlag())
             // continue;
-
-            totalReadCount += 1;
-
-            if (record.getReadUnmappedFlag()) { // discard unmapped reads
-                unmapped++;
-                if (keepUnmapped)
-                    writer.write(record);
-                return;
+            synchronized (lockf) {
+                totalReadCount++;
+                if (record.getReadUnmappedFlag()) { // discard unmapped reads
+                    unmapped++;
+                    if (keepUnmapped)
+                        writer.write(record);
+                    return;
+                }
+                readCount++;
             }
             // if (paired) {
             // if (!record.getReadPairedFlag()) {
@@ -127,7 +129,6 @@ public class DeduplicateSAM {
                 }
             }
 
-            readCount++;
         });
 
         try {
@@ -146,6 +147,7 @@ public class DeduplicateSAM {
         avgUMICount = 0;
         maxUMICount = 0;
         dedupedCount = 0;
+        Object locks = new Object();
 
         // always no tag
         final Map<Alignment, ClusterTracker> clusterTrackers = /*
@@ -179,22 +181,20 @@ public class DeduplicateSAM {
                 deduped = ((ParallelAlgorithm) algo).apply(e.getValue(), (ParallelDataStructure) data, currTracker,
                         umiLength, k, percentage);
 
-            currTracker.setOffset(dedupedCount);
+            synchronized (locks) {
+                currTracker.setOffset(dedupedCount);
 
-            avgUMICount += e.getValue().size();
-            maxUMICount = Math.max(maxUMICount, e.getValue().size());
-            dedupedCount += deduped.size();
-            deduped.parallelStream().forEach(read -> {
-                synchronized (writer) {
+                avgUMICount += e.getValue().size();
+                maxUMICount = Math.max(maxUMICount, e.getValue().size());
+                dedupedCount += deduped.size();
 
-                    // if (trackClusters) {
-                    // clusterTrackers.put(e.getKey(), currTracker);
-                    // } else {
-
+                // if(trackClusters){
+                // clusterTrackers.put(e.getKey(), currTracker);
+                // }else{
+                for (Read read : deduped)
                     writer.write(((SAMRead) read).toSAMRecord());
-                    // }
-                }
-            });
+                // }
+            }
         });
 
         // second pass to tag reads with their cluster and other stats
