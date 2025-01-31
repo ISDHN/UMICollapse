@@ -10,6 +10,7 @@ import htsjdk.samtools.SAMFileWriterFactory;
 
 import java.util.Map;
 import java.util.Spliterator;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,7 +46,7 @@ public class DeduplicateSAM {
 
         SamReader reader = SamReaderFactory.makeDefault().validationStringency(ValidationStringency.SILENT).open(in);
         Writer writer = new Writer(in, out, reader, paired);
-        Map<Alignment, Map<BitSet, ReadFreq>> align = new HashMap<>(1 << 16);
+        Map<Alignment, Map<BitSet, ReadFreq>> align = new ConcurrentHashMap<>(1 << 16);
 
         umiLength = umiLengthParam;
         totalReadCount = 0;
