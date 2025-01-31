@@ -65,7 +65,7 @@ public class DeduplicateSAM {
 
             // if (paired && record.getReadPairedFlag() && record.getSecondOfPairFlag())
             // continue;
-            synchronized (lockf) {
+            // synchronized (lockf) {
                 totalReadCount++;
                 if (record.getReadUnmappedFlag()) { // discard unmapped reads
                     unmapped++;
@@ -74,7 +74,7 @@ public class DeduplicateSAM {
                     return;
                 }
                 readCount++;
-            }
+            // }
             // if (paired) {
             // if (!record.getReadPairedFlag()) {
             // unpaired++;
