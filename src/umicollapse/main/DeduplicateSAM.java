@@ -9,11 +9,12 @@ import htsjdk.samtools.SAMFileWriter;
 import htsjdk.samtools.SAMFileWriterFactory;
 
 import java.util.Map;
+import java.util.Queue;
 import java.util.Spliterator;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 
 import java.util.stream.Stream;
@@ -28,7 +29,6 @@ import umicollapse.util.Read;
 import umicollapse.util.SAMRead;
 import umicollapse.util.ReadFreq;
 import umicollapse.util.ClusterTracker;
-import umicollapse.util.Utils;
 import static umicollapse.util.Utils.HASH_CONST;
 
 public class DeduplicateSAM {
@@ -52,7 +52,6 @@ public class DeduplicateSAM {
         umiLength = umiLengthParam;
         totalReadCount = 0;
         unmapped = 0;
-        Object lockf = new Object();
         int unpaired = 0;
         int chimeric = 0;
         readCount = 0;
@@ -162,7 +161,6 @@ public class DeduplicateSAM {
                     * (paired && !trackClusters) ? align.entrySet().stream().sorted((a, b) ->
                     * a.getKey().getRef().compareTo(b.getKey().getRef())) :
                     */align.entrySet().stream());
-        List<Read> allReads = new LinkedList<Read>();
 
         alignedEntryStream.forEach(e -> {
             List<Read> deduped;
@@ -193,12 +191,11 @@ public class DeduplicateSAM {
                 // if(trackClusters){
                 // clusterTrackers.put(e.getKey(), currTracker);
                 // }else{
-                allReads.addAll(allReads);
+                for (Read read : deduped)
+                    writer.write(((SAMRead) read).toSAMRecord());
                 // }
             }
         });
-        for (Read read : allReads)
-            writer.write(((SAMRead) read).toSAMRecord());
 
         // second pass to tag reads with their cluster and other stats
         /*
@@ -553,10 +550,11 @@ public class DeduplicateSAM {
     // heavily inspired by TwoPassPairWriter from UMI-tools
     private static class Writer {
         private boolean paired;
-        private SAMFileWriter writer;
         private File in;
         private String ref = null;
         private HashSet<ReversedRead> set;
+        private ConcurrentWriter writer;
+        private Thread writerThread;
 
         public Writer(File in, File out, SamReader r, boolean paired) {
             if (paired) {
@@ -564,8 +562,10 @@ public class DeduplicateSAM {
                 this.set = new HashSet<ReversedRead>();
             }
 
-            this.writer = new SAMFileWriterFactory().makeSAMOrBAMWriter(r.getFileHeader(), false, out);
             this.paired = paired;
+            this.writer = new ConcurrentWriter(out, r);
+            this.writerThread = new Thread(writer);
+            this.writerThread.start();
         }
 
         public void write(SAMRecord record) {
@@ -596,6 +596,11 @@ public class DeduplicateSAM {
                 writeReversed(true);
 
             writer.close();
+            try {
+                writerThread.join();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
         private void writeReversed(boolean fullPass) {
@@ -636,6 +641,44 @@ public class DeduplicateSAM {
                 e.printStackTrace();
             }
         }
+    }
+
+    private static class ConcurrentWriter implements Runnable {
+        private boolean running;
+        private SAMFileWriter writer;
+        private Queue<SAMRecord> writingTask = new ConcurrentLinkedQueue<>();
+
+        public ConcurrentWriter(File out, SamReader r) {
+            this.writer = new SAMFileWriterFactory().makeSAMOrBAMWriter(r.getFileHeader(), false, out);
+
+        }
+
+        public void addAlignment(SAMRecord record) {
+            if (running) {
+                writingTask.add(record);
+            } else {
+                throw new IllegalStateException("Writer is closed or not started!");
+            }
+
+        }
+
+        @Override
+        public void run() {
+            this.running = true;
+            while (running) {
+                SAMRecord record = writingTask.poll();
+                if (record != null)
+                    writer.addAlignment(record);
+            }
+            writer.close();
+        }
+
+        public void close() {
+            while (!writingTask.isEmpty())
+                ;
+            running = false;
+        }
+
     }
 
     private static class AlignReads {
