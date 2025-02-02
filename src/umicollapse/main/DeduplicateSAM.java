@@ -46,6 +46,7 @@ public class DeduplicateSAM {
         SAMRead.setDefaultUMIPattern(umiSeparator);
 
         SamReader reader = SamReaderFactory.makeDefault().validationStringency(ValidationStringency.SILENT).open(in);
+        System.out.println("The bam file's order is: " + reader.getFileHeader().getSortOrder());
         Writer writer = new Writer(in, out, reader, paired);
         Map<Alignment, Map<BitSet, ReadFreq>> align = new ConcurrentHashMap<>(1 << 16);
 
@@ -147,7 +148,6 @@ public class DeduplicateSAM {
         avgUMICount = 0;
         maxUMICount = 0;
         dedupedCount = 0;
-        Object locks = new Object();
 
         // always no tag
         final Map<Alignment, ClusterTracker> clusterTrackers = /*
@@ -181,21 +181,21 @@ public class DeduplicateSAM {
                 deduped = ((ParallelAlgorithm) algo).apply(e.getValue(), (ParallelDataStructure) data, currTracker,
                         umiLength, k, percentage);
 
-            synchronized (locks) {
-                currTracker.setOffset(dedupedCount);
+            currTracker.setOffset(dedupedCount);
 
-                avgUMICount += e.getValue().size();
-                maxUMICount = Math.max(maxUMICount, e.getValue().size());
-                dedupedCount += deduped.size();
+            avgUMICount += e.getValue().size();
+            maxUMICount = Math.max(maxUMICount, e.getValue().size());
+            dedupedCount += deduped.size();
 
-                // if(trackClusters){
-                // clusterTrackers.put(e.getKey(), currTracker);
-                // }else{
-                for (Read read : deduped)
-                    writer.write(((SAMRead) read).toSAMRecord());
-                // }
-            }
+            // if(trackClusters){
+            // clusterTrackers.put(e.getKey(), currTracker);
+            // }else{
+            for (Read read : deduped)
+                writer.write(((SAMRead) read).toSAMRecord());
+            // }
+
         });
+        System.out.println("Done deduplicating!");
 
         // second pass to tag reads with their cluster and other stats
         /*
@@ -650,7 +650,6 @@ public class DeduplicateSAM {
 
         public ConcurrentWriter(File out, SamReader r) {
             this.writer = new SAMFileWriterFactory().makeSAMOrBAMWriter(r.getFileHeader(), false, out);
-
         }
 
         public void addAlignment(SAMRecord record) {
@@ -659,7 +658,6 @@ public class DeduplicateSAM {
             } else {
                 throw new IllegalStateException("Writer is closed or not started!");
             }
-
         }
 
         @Override
